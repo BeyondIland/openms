@@ -450,6 +450,60 @@ test("closed-socket recovery does not hide unauthenticated sends or invalid prot
   });
 });
 
+for (const boundary of ["check", "command"]) {
+  test(`${boundary} retains a pending command when native socket closure precedes its callback`, async () => {
+    await withRecovery(async (probe) => {
+      const t = probe.transport;
+      const reported = [];
+      t.callbacks.onTransportError = (error) => reported.push(error);
+      t.lastMessageAt = performance.now();
+      const action = { kind: "revive.request", method: "return" };
+      let issued;
+      if (boundary === "check") issued = t.command(action);
+      t.socket.readyState = WebSocket.CLOSED;
+      if (boundary === "command") issued = t.command(action);
+      else t.check();
+      const pending = t.pending.get(issued.operationId);
+      const fields = structuredClone(pending.fields);
+      expect(t.status).toBe("recovering");
+      expect(t.recovery.pending).not.toBeNull();
+      expect(t.socket).toBeNull();
+      expect(reported).toEqual([]);
+      expect(probe.sent).toHaveLength(boundary === "check" ? 1 : 0);
+      t.check();
+      await t.recovery.task;
+      expect(t.status).toBe("active");
+      expect(t.pending.get(issued.operationId)).toBe(pending);
+      expect(pending.fields).toEqual(fields);
+      const commands = probe.sent.filter((entry) => entry.type === "command");
+      expect(commands).toHaveLength(boundary === "check" ? 2 : 1);
+      expect(commands.at(-1)).toMatchObject(fields);
+      expect(
+        probe.statuses.some((entry) => entry.status === "disconnected"),
+      ).toBe(false);
+      expect(reported).toEqual([]);
+    });
+  });
+}
+
+test("pending-send recovery preserves strict invalid-command and unauthenticated failures", async () => {
+  await withRecovery(async (probe) => {
+    const t = probe.transport;
+    t.socket.readyState = WebSocket.CLOSED;
+    expect(() =>
+      t.command({ kind: "revive.request", method: "unsupported" }),
+    ).toThrow("INVALID_MESSAGE");
+    expect(t.pending.size).toBe(0);
+    expect(t.recovery.pending).toBeNull();
+    t.playSession = null;
+    t.command({ kind: "revive.request", method: "return" });
+    expect(t.status).toBe("disconnected");
+    expect(t.snapshot().lastFailure.code).toBe("NOT_CONNECTED");
+    expect(t.recovery.pending).toBeNull();
+    expect(probe.sent).toEqual([]);
+  });
+});
+
 test("terminal transport failures retain bounded map/phase evidence after teardown and reach the error log", async () => {
   await withRecovery(async (probe) => {
     const t = probe.transport;

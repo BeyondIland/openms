@@ -1299,6 +1299,7 @@ export class OnlineTransport {
       void this.sendDevelopment(pending);
       return;
     }
+    if (this.recoverClosedSocket()) return;
     const cast = this.pending.get(pending.controlAfter);
     if (cast && cast.sentEpoch !== this.connectionEpoch) return;
     const now = performance.now();
@@ -1319,6 +1320,8 @@ export class OnlineTransport {
 
   recoverPending() {
     for (const pending of this.pending.values()) {
+      // Input flushing or an earlier send can begin recovery during this pass.
+      if (this.status !== "active") return;
       if (pending.sentEpoch !== this.connectionEpoch) this.sendPending(pending);
     }
   }

@@ -143,9 +143,6 @@ export function createLifecycle({ server, world, gateway, database, log }) {
         error.stack ?? error.message,
       );
       log("simulation.suspended", { code: error.code ?? error.name });
-      for (const socket of gateway.sockets) {
-        gateway.publications.close(socket, "SERVER_BUSY");
-      }
       close().catch((failure) => {
         console.error(
           logPrefix("server"),
@@ -176,17 +173,20 @@ export function createLifecycle({ server, world, gateway, database, log }) {
 }
 
 async function closeResources({ server, gateway, world, database }) {
+  // Fence admission synchronously and retain gateway cleanup while stopping the
+  // listener. Attach its error handler before either owner can finish shutdown.
+  const gatewayClosing = gateway.close().then(
+    () => null,
+    (error) => error,
+  );
   let failure;
   try {
     await server.stop(true);
   } catch (error) {
     failure = error;
   }
-  try {
-    await gateway.close();
-  } catch (error) {
-    failure ??= error;
-  }
+  const gatewayFailure = await gatewayClosing;
+  failure ??= gatewayFailure;
   try {
     await world.close();
   } catch (error) {
