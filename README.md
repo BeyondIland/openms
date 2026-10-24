@@ -4,6 +4,19 @@ NOTE: THIS PROJECT IS STILL IN DEVELOPMENT PHASE AND WILL UNDERGO SIGNIFICANT CH
 
 A browser reconstruction of MapleStory v83, built with JavaScript, PixiJS, Bun and PostgreSQL. It uses original WZ artwork and recovered client behavior, with [modern combat formulas](docs/combat-formulas.md) applied to the v83 content.
 
+## 中文分支说明
+
+源码修改日期：**2026-10-24**。
+
+本分支由 BeyondIland 维护，基于 [tensorfish/openms](https://github.com/tensorfish/openms)，保留原项目的许可证和资源准备流程，主要改进：
+
+- 临时断线重连，以及浏览器切到后台后恢复游戏的生命周期处理。
+- 门户切图时的过期请求隔离，以及技能动作与地图切换的交接。
+- 攻击输入排队和角色、地图之间的状态隔离。
+- Windows 生产构建的路径兼容与部署目录边界检查。
+
+仓库只提供源码，不附带官方 WZ 资源、提取后的 `client/public/generated/`、玩家数据库、本地账号或 `.env` 配置。运行前仍需按下方 Quick Start 单独准备资源和数据库。参见[分支维护与上游同步](docs/fork-maintenance.md)，了解如何保留本地改动并合并上游更新。
+
 ## Quick Start
 
 ### 1. Install the prerequisites

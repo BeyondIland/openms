@@ -4,6 +4,7 @@ import { OnlineWorld } from "../src/world.js";
 import { transitionActor } from "../src/field-transition.js";
 import { createProfile } from "../../client/src/profile/profile-validation.js";
 import { decodeClient } from "../../shared/protocol.js";
+import { createLifecycle } from "../src/index.js";
 
 function fixture() {
   const persisted = [];
@@ -62,6 +63,101 @@ function fixture() {
   gateway.characters.set(actor.id, actor);
   return { actor, field, gateway, world, session, persisted, released };
 }
+
+test("fatal simulation tick stops admission and completes orderly cleanup", async () => {
+  const probe = fixture();
+  const calls = [];
+  const server = {
+    stop(force) {
+      calls.push(["server", force]);
+    },
+  };
+  let worldClosed = false;
+  probe.world.step = () => {
+    throw new Error("fatal simulation fault");
+  };
+  probe.world.close = async () => {
+    worldClosed = true;
+  };
+  probe.gateway.database.close = async () => calls.push(["database"]);
+  const lifecycle = createLifecycle({
+    server,
+    world: probe.world,
+    gateway: probe.gateway,
+    database: probe.gateway.database,
+    log() {},
+  });
+
+  lifecycle.tick();
+  expect(calls).toContainEqual(["server", true]);
+  await lifecycle.close();
+  await lifecycle.close();
+
+  expect(worldClosed).toBe(true);
+  expect(probe.released).toEqual([probe.actor.id]);
+  expect(probe.gateway.accounts.size).toBe(0);
+  expect(probe.gateway.characters.size).toBe(0);
+  expect(probe.world.actors.size).toBe(0);
+  expect(calls.filter(([kind]) => kind === "database")).toHaveLength(1);
+  expect(calls.filter(([kind]) => kind === "server")).toHaveLength(1);
+});
+
+test("shutdown continues world and database cleanup after gateway retirement fails", async () => {
+  const calls = [];
+  const failure = new Error("retirement failed");
+  const lifecycle = createLifecycle({
+    server: {
+      stop() {
+        calls.push("server");
+      },
+    },
+    gateway: {
+      sockets: new Set(),
+      close: async () => {
+        calls.push("gateway");
+        throw failure;
+      },
+    },
+    world: {
+      step() {},
+      close: async () => calls.push("world"),
+    },
+    database: { close: async () => calls.push("database") },
+    log() {},
+  });
+
+  const firstClose = lifecycle.close();
+  expect(lifecycle.close()).toBe(firstClose);
+  await expect(firstClose).rejects.toBe(failure);
+  expect(calls).toEqual(["server", "gateway", "world", "database"]);
+});
+
+test("gateway shutdown retires every actor after an earlier checkpoint fails", async () => {
+  const probe = fixture();
+  const second = {
+    ...probe.actor,
+    id: "second-character",
+    accountId: "second-account",
+    sessionId: "second-session",
+    profile: structuredClone(probe.actor.profile),
+    simulation: fixtureSimulation(),
+  };
+  probe.field.characters.set(second.id, second);
+  probe.world.actors.set(second.id, second);
+  probe.gateway.accounts.set(second.accountId, second);
+  probe.gateway.characters.set(second.id, second);
+  const failure = new Error("first checkpoint failed");
+  probe.gateway.database.checkpoint = async (actor) => {
+    if (actor.id === probe.actor.id) throw failure;
+  };
+
+  await expect(probe.gateway.close()).rejects.toBe(failure);
+
+  expect(probe.released).toEqual([probe.actor.id, second.id]);
+  expect(probe.gateway.accounts.size).toBe(0);
+  expect(probe.gateway.characters.size).toBe(0);
+  expect(probe.world.actors.size).toBe(0);
+});
 
 function fixtureSimulation() {
   return {

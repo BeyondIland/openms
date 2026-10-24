@@ -24,12 +24,15 @@ import {
   takeMotionDiverts,
 } from "../src/field-diverts.js";
 import { PROTOCOL } from "../../shared/protocol.js";
+import { GameplayGateway } from "../src/gateway.js";
+import { takeAttackInput } from "../src/attack-input.js";
+import { OnlineWorld } from "../src/world.js";
 
 const content = await loadContent();
 const physics = (await content.map("100000000")).physics;
 
-function fixture() {
-  const simulation = createSimulation(physics, { x: 80, y: 274 });
+function fixture(fieldPhysics = physics) {
+  const simulation = createSimulation(fieldPhysics, { x: 80, y: 274 });
   const actor = {
     id: "walker",
     state: "active",
@@ -40,6 +43,7 @@ function fixture() {
     inputQueue: new Map(),
     attackEdges: [],
     receivedAttack: false,
+    inputSeq: 0,
     ackInputSeq: 0,
     actionStartTick: 0,
   };
@@ -49,7 +53,7 @@ function fixture() {
       faults.push(detail);
     },
   };
-  const client = createSimulation(physics, { x: 80, y: 274 });
+  const client = createSimulation(fieldPhysics, { x: 80, y: 274 });
   restoreMotion(client, captureMotion(simulation));
   prepareMotionDiverts(actor, actor.field);
   movementStreamView(actor);
@@ -63,6 +67,52 @@ function fixture() {
     seq: 0,
   };
 }
+
+test("underwater movement remains proven and acknowledged when rapid basic attacks exceed combat capacity", async () => {
+  const water = (await content.map("230040400")).physics;
+  const probe = fixture(water);
+  const closes = [];
+  probe.actor.connection = {
+    data: { ready: true },
+    close: (code, reason) => closes.push({ code, reason }),
+  };
+  movementStreamView(probe.actor);
+  for (let tick = 0; tick < 40; tick++) {
+    const packet = report(probe, { attack: tick % 4 === 0, horizontal: 0 });
+    OnlineWorld.prototype.input.call(probe.world, probe.actor, packet);
+    advance(probe);
+  }
+  expect(probe.actor.attackEdges).toHaveLength(8);
+  expect(probe.actor.attackAdmission).toBe("COOLDOWN");
+  expect(probe.actor.ackInputSeq).toBe(40);
+  expect(probe.actor.movementStream.steps).toBe(40);
+  expect(probe.actor.inputQueue.size).toBe(0);
+  expect(probe.actor.simulation.x).toBe(probe.client.x);
+  expect(probe.actor.simulation.y).toBe(probe.client.y);
+  expect(probe.faults).toEqual([]);
+  expect(probe.actor.state).toBe("active");
+  expect(probe.actor.retiring).not.toBe(true);
+  expect(closes).toEqual([]);
+  const consumed = [];
+  for (let edge = 0; edge < 8; edge++) {
+    expect(takeAttackInput(probe.actor)).toBe(true);
+    consumed.push(probe.actor.combatInputSeq);
+  }
+  expect(consumed).toEqual([1, 5, 9, 13, 17, 21, 25, 29]);
+  expect(takeAttackInput(probe.actor)).toBe(false);
+  expect(probe.actor.attackEdges).toEqual([]);
+  OnlineWorld.prototype.input.call(
+    probe.world,
+    probe.actor,
+    report(probe, { attack: true, horizontal: 0 }),
+  );
+  advance(probe, 2);
+  expect(probe.actor.ackInputSeq).toBe(41);
+  expect(takeAttackInput(probe.actor)).toBe(true);
+  expect(probe.actor.combatInputSeq).toBe(41);
+  expect(takeAttackInput(probe.actor)).toBe(false);
+  expect(closes).toEqual([]);
+});
 
 function report(probe, controls = {}) {
   const sample = {
@@ -355,4 +405,80 @@ test("withholding movement cannot suspend gravity indefinitely or erase time on 
   probe.actor.connection = {};
   movementStreamView(probe.actor);
   expect(probe.actor.simulation.y).toBe(y);
+});
+
+test("destination readiness pauses movement expiry, then starts a fresh bounded stream", () => {
+  const probe = fixture();
+  const socket = {
+    data: {
+      actor: probe.actor,
+      ready: false,
+      baselines: new Map([["snapshot", 1]]),
+    },
+  };
+  probe.actor.connection = socket;
+  movementStreamView(probe.actor);
+  let recoveries = 0;
+  probe.world.expireMovement = () => recoveries++;
+  const previousEpoch = probe.actor.movementStream.epoch;
+  advance(probe, PROTOCOL.INPUT_HISTORY + 1);
+  expect(recoveries).toBe(0);
+  expect(probe.actor.movementStream.expired).toBe(false);
+
+  probe.world.participants = { publish: async () => {} };
+  let motionUpdates = 0;
+  const gateway = {
+    world: probe.world,
+    publications: { motion: () => motionUpdates++ },
+  };
+  GameplayGateway.prototype.ready.call(gateway, socket, {
+    snapshotId: "snapshot",
+  });
+  expect(socket.data.ready).toBe(true);
+  expect(socket.data.readyDeadlineAt).toBeNull();
+  expect(probe.actor.movementStream.epoch).toBe(previousEpoch + 1);
+  expect(probe.actor.movementStream.startedTick).toBe(probe.actor.field.tick);
+  expect(motionUpdates).toBe(1);
+
+  advance(probe, PROTOCOL.INPUT_HISTORY + 1);
+  expect(recoveries).toBe(1);
+});
+
+test("a connection that never completes presentation readiness hits the shared timeout", () => {
+  const closed = [];
+  const deadline = 100 + PROTOCOL.ASSET_PREPARATION_TIMEOUT_MS;
+  const socket = {
+    data: {
+      actor: {},
+      ready: false,
+      readyDeadlineAt: deadline,
+    },
+  };
+  const gateway = {
+    publications: {
+      close(_socket, code, retryAfterMs) {
+        closed.push({ code, retryAfterMs });
+      },
+    },
+  };
+
+  GameplayGateway.prototype.heartbeat.call(gateway, socket, deadline);
+
+  expect(closed).toEqual([{ code: "TRANSITION_FAILED", retryAfterMs: 0 }]);
+});
+
+test("actor attachment starts a fresh presentation deadline after server preparation", () => {
+  const probe = fixture();
+  const socket = { data: { readyDeadlineAt: 1 } };
+  const before = Date.now();
+
+  GameplayGateway.prototype.attach.call({}, socket, probe.actor);
+
+  expect(socket.data.ready).toBe(false);
+  expect(socket.data.readyDeadlineAt).toBeGreaterThanOrEqual(
+    before + PROTOCOL.ASSET_PREPARATION_TIMEOUT_MS,
+  );
+  expect(socket.data.readyDeadlineAt).toBeLessThanOrEqual(
+    Date.now() + PROTOCOL.ASSET_PREPARATION_TIMEOUT_MS,
+  );
 });

@@ -11,6 +11,21 @@ artifacts/
 client/public/generated/
 client/dist/
 client/.cache/
+# Original game resources are supplied separately, never published as source.
+Maplestory-Client/
+Maplestory-Assets.zip
+*.wz
+*.nx
+# Machine-local runtimes, credentials, play data and logs.
+.openms-runtime/
+.openms-downloads/
+friends-private/
+pgdata*/
+*.dump
+*.backup
+*.sqlite
+*.sqlite3
+*.log
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 server/.cache/

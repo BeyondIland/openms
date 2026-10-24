@@ -89,16 +89,16 @@ After runtime changes, restart the backend and affected frontend, reload and sig
 
 Configure `.env.server`:
 
-| Setting                      | Default                                | Meaning                                            |
-| ---------------------------- | -------------------------------------- | -------------------------------------------------- |
-| `OPENMS_HOST`, `OPENMS_PORT` | `127.0.0.1`, `3200`                    | Backend listener                                   |
-| `OPENMS_ORIGIN`              | `http://127.0.0.1:3102`                | Browser origin allowed to authenticate/play        |
-| `OPENMS_STUDIO_ORIGIN`       | `http://127.0.0.1:3103`                | Separate browser origin for sessions and authoring |
-| `DATABASE_URL`               | Dedicated local database on port 55432 | PostgreSQL connection                              |
-| `OPENMS_CONTENT_ROOT`        | `client/public/generated`              | Verified immutable content                         |
-| `OPENMS_POW_BITS`            | `15`                                   | Login/registration proof difficulty, valid 8–24    |
-| `OPENMS_MOTION_WATCHDOG_ENABLED` | `false` | Motion discrepancy enforcement; accepts exactly `true` or `false` |
-| `OPENMS_DEV_PASSWORD`        | `password`                             | Bootstrap account password override                |
+| Setting                          | Default                                | Meaning                                                           |
+| -------------------------------- | -------------------------------------- | ----------------------------------------------------------------- |
+| `OPENMS_HOST`, `OPENMS_PORT`     | `127.0.0.1`, `3200`                    | Backend listener                                                  |
+| `OPENMS_ORIGIN`                  | `http://127.0.0.1:3102`                | Browser origin allowed to authenticate/play                       |
+| `OPENMS_STUDIO_ORIGIN`           | `http://127.0.0.1:3103`                | Separate browser origin for sessions and authoring                |
+| `DATABASE_URL`                   | Dedicated local database on port 55432 | PostgreSQL connection                                             |
+| `OPENMS_CONTENT_ROOT`            | `client/public/generated`              | Verified immutable content                                        |
+| `OPENMS_POW_BITS`                | `15`                                   | Login/registration proof difficulty, valid 8–24                   |
+| `OPENMS_MOTION_WATCHDOG_ENABLED` | `false`                                | Motion discrepancy enforcement; accepts exactly `true` or `false` |
+| `OPENMS_DEV_PASSWORD`            | `password`                             | Bootstrap account password override                               |
 
 Compose defaults are `POSTGRES_USER=openms`, `POSTGRES_PASSWORD=openms_local_only`, `POSTGRES_DB=openms`, `POSTGRES_PORT=55432`. Export overrides or pass a private `--env-file` to Compose, then supply a matching `DATABASE_URL` to Bun. Compose and Bun do not load each other's scoped files.
 
@@ -116,19 +116,20 @@ World search/Go, pause/step, physics changes, monster spawning, Character preset
 
 Both launchers write structured development logs to **stdout**, including startup stages, elapsed time, identities, HTTP refusals, WebSocket lifecycle and operation outcomes. Each entry starts with an ISO 8601 **UTC date and time**, including milliseconds and the `Z` timezone marker: `[2026-09-15T14:30:45.123Z] [server +125.4ms] listener.ready {...}`. Elapsed time uses a separate monotonic clock, so changing the system clock does not change duration measurements. Client build progress, startup messages, browser console diagnostics and server errors use the same date-time prefix; ordinary messages omit elapsed time. Structured diagnostics exclude passwords, cookies, tickets and message bodies. The development launcher separately prints its bootstrap credentials to the terminal with timestamps.
 
-| Symptom                                    | Check / correction                                                                                                                                                                  |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `403 NOT_ALLOWED` on login or registration | Find `http.rejected`. For `reason: origin-mismatch`, compare request origin with `development.start`'s configured origin. Otherwise check challenge/CSRF proof and session state.   |
-| `localhost` works but another host fails   | Loopback development admits `localhost`, `127.0.0.1` and `[::1]` only with the configured scheme/port; cookies remain host-specific. LAN and production origins must match exactly. |
-| `CONTENT_MISMATCH` after code changes      | Restart backend and frontend together; reload the browser. Do not bypass the rules/catalog guard.                                                                                   |
-| Default credentials fail                   | Confirm the current launcher completed bootstrap against the intended database and check `OPENMS_DEV_PASSWORD`. Role conflicts are explicit startup failures.                       |
-| Missing catalog or WZ file                 | Check the `--assets` directory and complete extraction before launching; the backend expects `client/public/generated/catalog.json`.                                                |
-| Compose rejects `--wait`                   | Install/select a Compose provider supporting `up --wait` and `--wait-timeout`; check `podman compose version`.                                                                      |
-| `MIGRATIONS_REQUIRED` at backend startup   | Run `bun run migrate --database-url URL` against the backend database, then restart. Both development and production startup only check the schema.                                 |
-| Backend cannot connect to PostgreSQL       | Check Compose health and `DATABASE_URL`; no in-memory fallback exists.                                                                                                              |
-| A second tab cannot start                  | One game owner per browser storage origin is intentional. Close the owner or use another isolated browser profile.                                                                  |
-| Connection loss or server restart          | Transient reconnect has a 30 s grace; commands freeze. Authentication is process-local, so backend restart requires login again.                                                    |
-| Slow map loading, delayed NPC pages or walking disconnects | Follow [Slow connections](#slow-connections) to distinguish a transport failure from artwork preparation and retain useful diagnostics. |
+| Symptom                                                    | Check / correction                                                                                                                                                                  |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `403 NOT_ALLOWED` on login or registration                 | Find `http.rejected`. For `reason: origin-mismatch`, compare request origin with `development.start`'s configured origin. Otherwise check challenge/CSRF proof and session state.   |
+| `localhost` works but another host fails                   | Loopback development admits `localhost`, `127.0.0.1` and `[::1]` only with the configured scheme/port; cookies remain host-specific. LAN and production origins must match exactly. |
+| `CONTENT_MISMATCH` after code changes                      | Restart backend and frontend together; reload the browser. Do not bypass the rules/catalog guard.                                                                                   |
+| Default credentials fail                                   | Confirm the current launcher completed bootstrap against the intended database and check `OPENMS_DEV_PASSWORD`. Role conflicts are explicit startup failures.                       |
+| Missing catalog or WZ file                                 | Check the `--assets` directory and complete extraction before launching; the backend expects `client/public/generated/catalog.json`.                                                |
+| Compose rejects `--wait`                                   | Install/select a Compose provider supporting `up --wait` and `--wait-timeout`; check `podman compose version`.                                                                      |
+| `MIGRATIONS_REQUIRED` at backend startup                   | Run `bun run migrate --database-url URL` against the backend database, then restart. Both development and production startup only check the schema.                                 |
+| Backend cannot connect to PostgreSQL                       | Check Compose health and `DATABASE_URL`; no in-memory fallback exists.                                                                                                              |
+| A second tab cannot start                                  | One game owner per browser storage origin is intentional. Close the owner or use another isolated browser profile.                                                                  |
+| Connection loss or server restart                          | Transient reconnect has a 30 s grace; commands freeze. Authentication is process-local, so backend restart requires login again.                                                    |
+| `Authoritative simulation suspended` in the server log     | A fatal simulation error stops the listener and retires characters through shutdown. Fix the reported error, restart backend and frontend, then sign in again.                      |
+| Slow map loading, delayed NPC pages or walking disconnects | Follow [Slow connections](#slow-connections) to distinguish a transport failure from artwork preparation and retain useful diagnostics.                                             |
 
 Stop/start the database explicitly with `podman compose -f infra/compose.yaml stop` / `start`. Ordinary shutdown does not remove the persistent volume.
 
@@ -136,13 +137,26 @@ Stop/start the database explicitly with `podman compose -f infra/compose.yaml st
 
 Map downloads run independently of connection maintenance. A loading screen can remain visible while the socket is healthy. Movement accounts for measured network delay, and ordinary NPC pages include their text in the server response. Page changes still require the server's round trip and processing time. The [protocol](server/protocol.md#slow-connections-and-presentation-recovery) defines separate connection, presentation and recovery limits.
 
-| Observation | Meaning and next step |
-| --- | --- |
-| `CONNECT_TIMEOUT` | Connection establishment or initial baseline delivery missed its client deadline. Compare browser and server timestamps; artwork preparation uses a separate deadline. |
-| `HEARTBEAT_TIMEOUT` | The client stopped receiving valid server traffic. Check backend availability and the WebSocket path through the proxy. |
-| `PRESENTATION_FAILED` or an asset-download error | Inspect the failed resource and its HTTP status. Presentation recovery retains the socket and uses a bounded retry budget. |
-| `CHARACTER_BUSY` after an interrupted entry | Once `welcome` has supplied a play session, retry from the same page to retain it, including when no baseline was received. If the character-selection screen shows a connection-loss dialog, dismiss it before clicking **Enter the world**. A different live owner still prevents entry. |
-| Server log says `code:1000, reason:"resynchronize"` | This generic client-close reason appears in older builds and does not identify the underlying cause. Updated clients send a bounded failure reason; capture the browser message as well when a proxy omits close details. |
+Destination presentation must finish before movement deadlines start. An explicitly unready connection continues heartbeats while its artwork loads, within the existing 120 s asset-preparation limit. Readiness establishes a fresh movement stream and immediate checkpoint; loading time never becomes movement credit. Canceling a scene preparation destroys its nested region and atlas owners immediately, and a candidate that completes after cancellation cannot replace the visible field.
+
+Background pages stop submitting movement, so the existing 128-tick active movement bound can still request recovery. Recoverable socket loss retains the selected character and pending operation IDs, waits while hidden, then automatically uses the authenticated entry handshake when execution resumes. After the reconnect grace expires, the server restores the character from its saved profile. Recovery allows three attempts and a 180 s foreground attempt window; ten seconds of sustained movement input resets the incident budget. Expired authentication and exhausted recovery return to sign-in with an explicit reason. Browser lifecycle checks must disable focus emulation before pausing the page, because forced focus can conceal this failure.
+
+For an unexpected return to sign-in, retain `lastFailure` from Diagnostics → Connection → Technical observation. This bounded record survives connection reset and event-history truncation, including the failure code, map, transition phase and receiving stage. Unexpected terminal transport failures also enter the error log. The local development proxy forwards WebSocket close codes and reasons instead of replacing them, so compare frontend and backend close records before assigning a cause.
+
+An old portal command with an unknown outcome must not reserve travel forever after a fresh play session. A complete authoritative baseline releases that reservation and keeps the original command in a bounded unresolved-receipt archive. It does not replay the portal script or infer whether the old command committed. Durable inventory and other transaction recovery retain their existing envelopes and retry policy.
+
+Skill resources keep their source field when travel tears them down. Destination skill restoration records its visuals and looping voices without publishing field events until the committed transition has reached the traveler; the destination baseline then carries the restored state. This prevents retained summons such as Ifrit, or old voice cleanup, from producing a destination event while the client still expects the source epoch. `STALE_FIELD` admission remains strict.
+
+Basic attack presses use a separate eight-entry, two-second queue. Expired entries are removed before admitting another press, even while a skill or profile transaction pauses combat consumption. A full queue declines the extra attack as cooldown while accepting valid movement; it does not disconnect the character. Network rate limits, movement validation and durable command admission remain independent.
+
+| Observation                                                   | Meaning and next step                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CONNECT_TIMEOUT`                                             | Connection establishment or initial baseline delivery missed its client deadline. Compare browser and server timestamps; artwork preparation uses a separate deadline.                                                                                                                     |
+| `HEARTBEAT_TIMEOUT`                                           | The client stopped receiving valid server traffic. Check backend availability and the WebSocket path through the proxy.                                                                                                                                                                    |
+| `PRESENTATION_FAILED` or an asset-download error              | Inspect the failed resource and its HTTP status. Presentation recovery retains the socket and uses a bounded retry budget.                                                                                                                                                                 |
+| `CHARACTER_BUSY` after an interrupted entry                   | Once `welcome` has supplied a play session, retry from the same page to retain it, including when no baseline was received. If the character-selection screen shows a connection-loss dialog, dismiss it before clicking **Enter the world**. A different live owner still prevents entry. |
+| `CHARACTER_BUSY` immediately after reloading the browser page | A page reload loses the in-memory resume token. Close any other game owner and allow the 30 s reconnect grace to expire before entering again.                                                                                                                                             |
+| Server log says `code:1000, reason:"resynchronize"`           | This generic client-close reason appears in older builds and does not identify the underlying cause. Updated clients send a bounded failure reason; capture the browser message as well when a proxy omits close details.                                                                  |
 
 For a reproducible failure, retain the UTC timestamps, source/rules/catalog identities, map ID, whether the interruption occurred during loading or movement, browser error, and the server's `socket.attached`, `socket.closing` and `socket.closed` lines when present. Include the failing asset URL/status for loading errors. [Production diagnostics](#production) are available without enabling development mode. The [isolated latency check](validation-method.md#slow-network-gameplay-check) exercises delayed assets, movement, dialogue, travel and reconnect with disposable state.
 
