@@ -36,7 +36,7 @@ Skip `podman machine init` if you already have a machine, and skip `start` if it
 ### 2. Clone and install
 
 ```sh
-git clone https://github.com/tensorfish/openms.git
+git clone https://github.com/BeyondIland/openms.git
 cd openms
 bun install --frozen-lockfile
 cp -n .env.server.example .env.server
