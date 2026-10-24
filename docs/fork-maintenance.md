@@ -2,6 +2,8 @@
 
 本分支基于 [tensorfish/openms](https://github.com/tensorfish/openms)，沿用原项目的 [GPL 许可证](../LICENSE)。源码更新与游戏资源、玩家存档分别维护；仓库不提供官方 WZ、提取后的资源、玩家数据库、本地账号或 `.env` 配置。
 
+换电脑或重新部署时，参见[在另一台电脑恢复运行](restore-on-another-computer.md)，按需恢复源码、资源、配置和玩家存档。
+
 ## 获取本分支
 
 ```sh

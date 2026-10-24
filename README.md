@@ -17,6 +17,8 @@ A browser reconstruction of MapleStory v83, built with JavaScript, PixiJS, Bun a
 
 仓库只提供源码，不附带官方 WZ 资源、提取后的 `client/public/generated/`、玩家数据库、本地账号或 `.env` 配置。运行前仍需按下方 Quick Start 单独准备资源和数据库。参见[分支维护与上游同步](docs/fork-maintenance.md)，了解如何保留本地改动并合并上游更新。
 
+换电脑或重新部署时，参见[在另一台电脑恢复运行](docs/restore-on-another-computer.md)，按需恢复源码、资源、配置和玩家存档。
+
 ## Quick Start
 
 ### 1. Install the prerequisites
